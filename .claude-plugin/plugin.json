@@ -1,0 +1,25 @@
+{
+  "name": "google-ads-audit",
+  "version": "0.1.0",
+  "description": "Comprehensive Google Ads audit across 14 categories — Quality Score, Performance Max, conversion tracking, audiences, landing pages, wasted spend, and more. Powered by Optmyzr's audit methodology.",
+  "author": {
+    "name": "Optmyzr Inc.",
+    "url": "https://www.optmyzr.com"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/optmyzr-skills/google-ads-audit",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/optmyzr-skills/google-ads-audit.git"
+  },
+  "keywords": [
+    "google-ads",
+    "ppc",
+    "audit",
+    "performance-max",
+    "quality-score",
+    "optmyzr",
+    "claude-code",
+    "skill"
+  ]
+}
