@@ -23,28 +23,121 @@ Check whether the Optmyzr MCP is connected. Look for tool names matching:
 **If the Optmyzr MCP is available**, tell the user:
 > "Optmyzr MCP detected — I'll pull data live. No paste needed."
 
-Then proceed to Step 2 (interview) and then **Step 3b (MCP branch)**.
+Then proceed to **Step 2** (identify the account) → **Step 3** (establish context) → **Step 4b** (MCP branch).
 
 **If the Optmyzr MCP is not available**, tell the user:
 > "I'll guide you through 4 quick exports from your Google Ads account. Total time: about 3 minutes. (Tip: connect the Optmyzr MCP server and we skip the paste step entirely — see footer of the report.)"
 
-Then proceed to Step 2 (interview) and then **Step 3a (manual paste)**.
+Then proceed to **Step 2** (identify the account) → **Step 3** (establish context) → **Step 4a** (manual paste).
 
 ---
 
-## Step 2 — Pre-audit interview (~30 seconds)
+## Step 2 — Identify the account
 
-Ask three short questions before any data collection. These anchor the entire audit and calibrate what counts as "good" or "bad":
+Account selection always comes **before** any context questions. The skill should know what it's auditing before asking the user anything else.
 
-1. **Primary goal** — Lead generation / E-commerce sales / Brand awareness / App installs / Other (please specify)?
-2. **Target efficiency** — What's your target CPA or ROAS? (Or "not sure" if they don't know.)
-3. **Account maturity** — Roughly how long has this account been active? (New <6mo / Established 6mo-2yr / Mature >2yr)
+### MCP path
 
-Store the answers. Use them when scoring (e.g. "Smart Bidding still in learning" only counts as a Pass if the account is new; "low ROAS" only counts as a Fail if it's an e-commerce account with a stated ROAS target).
+Call `get_active_accounts`. Inspect the result:
+
+- **0 accounts:** auth or scope problem — surface the MCP error message and stop.
+- **1 account:** auto-select. Tell the user: *"Auditing **[name]** ([id])."*
+- **Multiple accounts (typical for agencies):** show the first 10 in a table (Account ID + Name) and ask which one to audit. Accept either an account name (passed as `searchQuery` in a follow-up `get_active_accounts` call) or a 10-digit Account ID.
+
+If the user already mentioned an account name in their original message, pass it as `searchQuery` immediately — saves a round trip.
+
+### Paste path
+
+Ask the user one short question:
+
+> "What account are you auditing? (Just the account name — for the report header.)"
+
+Don't ask for the Account ID in paste mode — it's not needed.
 
 ---
 
-## Step 3a — Manual paste flow (no MCP)
+## Step 3 — Establish context
+
+The audit calibrates findings against the account's **goal**, **target efficiency**, and **maturity**. With MCP connected, almost all of this can be deduced from data — show the user what was deduced and confirm in one quick exchange instead of an open-ended interview.
+
+### MCP path: deduce, then confirm (one exchange)
+
+Pull these in parallel before talking to the user. They're the minimum needed to deduce context — additional Tier 1/2/3 calls happen in Step 4b after context is locked.
+
+1. `get_ppc_report` `report_name=AccountPerformance`, last 30 days — **current performance**
+2. `get_ppc_report` `report_name=AccountPerformance`, date range starting **730 days ago** — maturity probe (was there spend 2+ years ago?)
+3. `get_ppc_report` `report_name=CampaignPerformance`, last 30 days, top 10 by Cost — campaign type mix (Search / Shopping / PMax / Display / App / Video / Demand Gen)
+4. `get_merchant_feed_details` — returns data only if a Merchant Center feed is linked, which is a strong e-commerce signal
+
+**Deduce three context dimensions:**
+
+#### Goal (primary)
+
+Run these checks in order; the first match wins:
+
+| If… | Then deduced goal is… |
+|---|---|
+| Merchant feed exists OR any campaign is `Shopping` / `Performance Max` (with feed) | **e-commerce** |
+| Any campaign type is `App` (UAC) | **app installs** |
+| `Conv. value > 0` in AccountPerformance AND no Shopping/PMax | **value-based lead gen** (treat as e-com for ROAS scoring; treat as lead gen for everything else) |
+| Conversions tracked but `Conv. value = 0` (i.e. ROAS shows 0%) | **lead generation** |
+| Display/Video/Demand Gen dominate spend, very few or zero conversions | **brand awareness** |
+| Mixed signals or ambiguous | don't guess — ask explicitly |
+
+Always note the **specific signal** that drove the deduction so the user can sanity-check it.
+
+#### Maturity
+
+From the 730-day probe response, find the **earliest month with non-zero spend**:
+
+- ≥ 24 months ago → **mature**
+- 6–24 months ago → **established**
+- < 6 months ago → **new**
+
+(Use first non-zero spend month, not just account creation date — accounts often sit dormant for months before launching.)
+
+#### Current efficiency
+
+From the 30-day AccountPerformance:
+
+- For e-commerce / value-based: **current ROAS** = `Conv. value / Cost`
+- For lead gen: **current CPA** = `Cost / Conversions`
+- For brand: **current CPM** + CTR
+
+#### Present deductions and confirm
+
+Output one consolidated message:
+
+> *"I pulled live data for **[account name]**. Here's what I see:*
+>
+> *- **Account type:** [lead gen / e-commerce / brand awareness / app installs] — based on [specific signal: e.g. "no Conv. value tracked, conversions present"]*
+> *- **Maturity:** [new / established / mature] — first spend [month/year]*
+> *- **Current performance (30 days):** $[X] CPA / [Y]× ROAS / etc.*
+>
+> *Two quick questions before I run the audit:*
+>
+> *1. **Target efficiency** — is your goal [lower than / around / higher than] the current $[X] CPA? (Or give me a specific target.)*
+> *2. **Anything else I should know?** (e.g. "we just changed bid strategies last week", "this is a brand-only push during a launch", "the German market is intentionally being de-prioritized.") If nothing, just say "all good."*"
+
+The user confirms or corrects in one exchange. Move on. Do NOT ask 3 separate questions — that was the v0.1 flow; the new flow defaults to deduction.
+
+If any deduction was ambiguous or the user corrects something, update the stored context and proceed.
+
+### Paste path: ask 3 anchored questions (no data yet to deduce from)
+
+Since we have no live data, ask the original 3 questions in **one block** to keep the round-trip count low:
+
+> "Three quick questions to anchor the audit:
+>
+> 1. **Primary goal** — Lead generation / E-commerce sales / Brand awareness / App installs / Other (please specify)?
+> 2. **Target efficiency** — What's your target CPA or ROAS? (Or 'not sure' if you don't have a defined target.)
+> 3. **Account maturity** — New (under 6mo) / Established (6mo–2yr) / Mature (2+ yr)?"
+
+Use answers to calibrate scoring (per `scoring.md`).
+
+---
+
+## Step 4a — Manual paste flow (no MCP)
 
 Follow `reports.md` for exact UI paths and column requirements. Walk the user through 4 paste targets in this order:
 
@@ -61,19 +154,19 @@ If they skip, proceed and note the limitation in the PMax category. Add an expli
 
 ---
 
-## Step 3b — MCP branch (Optmyzr MCP connected)
+## Step 4b — MCP branch (Optmyzr MCP connected)
 
-Call these tools to gather data. Parallelize independent calls where possible.
+Account selection happened in Step 2; context (goal/maturity/efficiency) was deduced in Step 3. Now pull the rest of the data and prepare the gap-fill choice.
 
-### 3b.1 — Tier 1 (core data)
+### 4b.1 — Tier 1 (remaining core data)
 
-1. `get_active_accounts` — list accounts, ask user to confirm which one to audit
-2. `get_ppc_report` with `report_name=AccountPerformance` — overall stats
-3. `get_ppc_report` with `report_name=CampaignPerformance` — campaign details (paginate; max 10 rows/page)
-4. `get_ppc_report` with `report_name=PositiveKeywordPerformance` — keywords (paginate)
-5. `get_ppc_report` with `report_name=AdPerformance` — ads
+Some Tier 1 calls already ran in Step 3 to power deductions (`AccountPerformance` 30d + 730d, `CampaignPerformance` top 10, `get_merchant_feed_details`). Now pull what's left:
 
-### 3b.2 — Detect gaps and offer paste-fill (CRITICAL)
+1. `get_ppc_report` `report_name=CampaignPerformance` — paginate beyond the first page to cover all material campaigns
+2. `get_ppc_report` `report_name=PositiveKeywordPerformance` — keywords (paginate; max 10 rows/page)
+3. `get_ppc_report` `report_name=AdPerformance` — ads + Ad Strength
+
+### 4b.2 — Detect gaps and offer paste-fill (CRITICAL)
 
 **The MCP path must never produce a worse audit than the manual paste path.** As of v0.1, the Optmyzr MCP does not expose four data types that the paste flow does:
 
@@ -109,22 +202,22 @@ If the user picks **B**, proceed with fallback inference (see `signals.md` — e
 
 Either way, the resulting audit must be **at least as informative** as the paste-only path.
 
-### 3b.3 — Tier 2 (MCP-only unlocks)
+### 4b.3 — Tier 2 (MCP-only unlocks)
 
 These signals are MCP-exclusive — they're impossible to derive from Google Ads exports.
 
-6. `get_ppc_report` with `report_name=ChangeHistory` — risky recent changes
-7. `get_competitor_insights` — Auction Insights overlap + period-over-period shifts
-8. **`get_industry_insights`** — vertical benchmarks (see Step 3b.4 for vertical selection)
-9. `get_merchant_feed_details` — *only if account has Shopping or PMax* — feed disapproval ratios
+4. `get_ppc_report` with `report_name=ChangeHistory` — risky recent changes
+5. `get_competitor_insights` — Auction Insights overlap + period-over-period shifts
+6. **`get_industry_insights`** — vertical benchmarks (see Step 4b.4 for vertical selection)
+7. `get_merchant_feed_details` — already pulled in Step 3 if applicable; reuse those results
 
-### 3b.4 — Vertical selection for industry benchmarks
+### 4b.4 — Vertical selection for industry benchmarks
 
 `get_industry_insights` silently maps the input vertical to "the closest supported vertical." If you pass "Non-Profit" you may get back "Sports:Outdoor Sport" with no warning — bad for trust.
 
 Procedure:
 
-1. **First call** with your best inference (account name, domain, account goal). E.g. for an account targeting employee-engagement / corporate-philanthropy keywords, try `vertical_name="Charity & Non-Profit"`.
+1. **First call** with your best inference (account name, domain, deduced goal). E.g. for an account targeting employee-engagement / corporate-philanthropy keywords, try `vertical_name="Charity & Non-Profit"`.
 2. **Inspect the response.** It typically returns the resolved vertical name. If the resolved vertical doesn't share a meaningful substring with what you sent (e.g. you sent "Non-Profit" and got "Sports:Outdoor Sport"), the resolution is poor.
 3. **On poor match, present the user with a curated list** and ask them to pick. Use this list as the canonical reference (see `verticals.md` for the full list — common verticals shown below):
 
@@ -153,10 +246,10 @@ Procedure:
 4. **Re-call** with the user's pick.
 5. **Always tell the user** which vertical was used in the report header (so they can override later if the comparison feels off).
 
-### 3b.5 — Tier 3 (alert coverage)
+### 4b.5 — Tier 3 (alert coverage)
 
-10. `get_configured_alerts` — what monitoring is in place
-11. `get_triggered_alerts` — what's recently fired
+8. `get_configured_alerts` — what monitoring is in place
+9. `get_triggered_alerts` — what's recently fired
 
 ### Pagination notes for `get_ppc_report`
 
@@ -166,7 +259,7 @@ Procedure:
 
 ---
 
-## Step 4 — Audit each category
+## Step 5 — Audit each category
 
 Walk through the 14 categories in order. For each, evaluate the top 3 signals listed in `signals.md`. Produce findings with status:
 
@@ -174,7 +267,7 @@ Walk through the 14 categories in order. For each, evaluate the top 3 signals li
 - **WARNING** — partial / minor issue / borderline
 - **FAIL** — clear best-practice violation
 
-Where possible, estimate **$ wasted/month** or **$ opportunity/month** for each finding. Use the user's pre-audit goal and target CPA/ROAS to calibrate severity.
+Where possible, estimate **$ wasted/month** or **$ opportunity/month** for each finding. Use the deduced (or stated) goal and target CPA/ROAS to calibrate severity.
 
 **The 14 categories:**
 
@@ -197,7 +290,7 @@ If a signal cannot be evaluated from the available data (e.g. "Are conversions s
 
 ---
 
-## Step 5 — Score and assemble report
+## Step 6 — Score and assemble report
 
 Apply scoring per `scoring.md`:
 - Each signal scored 0–MaxPoints based on PASS/WARNING/FAIL
@@ -215,7 +308,7 @@ Format output per `output-template.md`. The report has 5 sections:
 
 ---
 
-## Step 6 — Footer (Optmyzr nudge)
+## Step 7 — Footer (Optmyzr nudge)
 
 Always include the "What this audit can't see" section, but the content depends on the flow:
 
@@ -240,8 +333,10 @@ When the user says yes to a Rule Engine fix, call `re_generate_strategy_chain` w
 
 ## Behavioral guidelines
 
+- **Account first, context second.** Never ask context questions before knowing what account is being audited.
+- **Deduce, don't ask, when MCP is connected.** Show the user what you figured out from data, then ask one anchored confirming question — never an open-ended 3-question interview.
 - **Be honest about gaps.** If you can't evaluate a signal, say so. A short, accurate audit beats a long, fabricated one.
-- **Calibrate to the user's stated goal.** Don't penalize a brand-awareness account for low ROAS, or a new account for Smart Bidding still in learning.
+- **Calibrate to the goal.** Don't penalize a brand-awareness account for low ROAS, or a new account for Smart Bidding still in learning. Don't reward a mature account for using eCPC just because it "still works."
 - **Quantify impact in dollars where possible.** "5% wasted spend" is forgettable; "$1,240/month leaking on irrelevant searches" gets acted on.
 - **Top 5 first.** Many users will only read the top of the report. Make those 5 findings count.
 - **Optmyzr branding lives in the output, not the install flow.** The "What this audit can't see" footer and the report header (subtitled "Powered by Optmyzr") are the brand surfaces. Don't oversell.
