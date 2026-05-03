@@ -1,0 +1,91 @@
+name: Release
+
+# Auto-build the Claude Skill zip and publish it to GitHub Releases
+# whenever a version tag (vX.Y.Z) is pushed.
+#
+# Workflow:
+#   1. Maintainer tags a release locally:
+#        git tag -a v0.2.0 -m "v0.2.0"
+#        git push origin v0.2.0
+#   2. This workflow fires automatically on the tag push.
+#   3. It builds google-ads-audit-vX.Y.Z.zip with the same structure
+#      claude.ai's Skills upload accepts:
+#        google-ads-audit/
+#          ├── SKILL.md
+#          ├── reports.md
+#          ├── signals.md
+#          ├── scoring.md
+#          ├── output-template.md
+#          ├── verticals.md
+#          ├── LICENSE
+#          └── NOTICE
+#   4. It creates (or updates) the GitHub Release for that tag and
+#      attaches the zip as a downloadable asset.
+#   5. The "Latest" download URL stays stable for marketing/links:
+#        https://github.com/optmyzr-skills/google-ads-audit/releases/latest/download/google-ads-audit-<latest>.zip
+#
+# To customize release notes, create the release manually first
+# (e.g. via `gh release create vX.Y.Z --notes-file notes.md`) before
+# pushing the tag — this workflow will then only attach the zip and
+# leave your notes untouched.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build skill zip and publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: meta
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Version: $TAG"
+
+      - name: Build skill zip
+        run: |
+          set -euo pipefail
+          STAGE="dist/google-ads-audit"
+          mkdir -p "$STAGE"
+
+          # Copy skill markdown files
+          cp skills/google-ads-audit/*.md "$STAGE/"
+
+          # Apache 2.0 attribution must travel with the zip
+          cp LICENSE NOTICE "$STAGE/"
+
+          # Sanity check: SKILL.md must be present and well-formed
+          test -f "$STAGE/SKILL.md" || { echo "::error::SKILL.md missing"; exit 1; }
+          head -1 "$STAGE/SKILL.md" | grep -q '^---' || { echo "::error::SKILL.md frontmatter malformed"; exit 1; }
+
+          # Build the zip
+          cd dist
+          ZIP_NAME="google-ads-audit-${{ steps.meta.outputs.tag }}.zip"
+          zip -r "$ZIP_NAME" google-ads-audit -x "*.DS_Store"
+
+          echo "--- zip contents ---"
+          unzip -l "$ZIP_NAME"
+
+          # Echo the path for the next step
+          echo "ZIP_PATH=dist/$ZIP_NAME" >> "$GITHUB_ENV"
+
+      - name: Attach zip to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/google-ads-audit-*.zip
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          # If a release already exists for this tag (e.g. created manually
+          # with custom notes), this action will append the zip without
+          # overwriting the existing notes.

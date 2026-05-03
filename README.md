@@ -6,6 +6,7 @@
 
 **14 categories. ~42 signals. A graded report. A 7-day action plan. A wasted-spend dollar figure.**
 
+[![Release](https://github.com/optmyzr-skills/google-ads-audit/actions/workflows/release.yml/badge.svg)](https://github.com/optmyzr-skills/google-ads-audit/releases/latest)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Powered by Optmyzr](https://img.shields.io/badge/Powered%20by-Optmyzr-FF6B35)](https://www.optmyzr.com)
 [![Claude Code](https://img.shields.io/badge/Built%20for-Claude%20Code-D97757)](https://claude.com/product/claude-code)
