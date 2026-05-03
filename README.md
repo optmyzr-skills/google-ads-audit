@@ -92,24 +92,51 @@ It's a **daily-driver tool**, not a one-time gimmick. Run it before every QBR. R
 
 ## ⚡ Install — 60 seconds
 
-> **You need [Claude Code](https://claude.com/product/claude-code) installed first.** *(Free for individuals. Available as CLI, desktop app, web at [claude.ai/code](https://claude.ai/code), and IDE extensions.)*
+Pick the option that matches how you use Claude. **Most users want Option 1.**
 
-### Option A — Plugin install (recommended)
+### 🟢 Option 1 — Upload the zip (Claude.ai web or Claude Desktop)
 
-In any Claude Code conversation, type:
+> **For everyone using [claude.ai](https://claude.ai) or the Claude Desktop app.** No coding required.
+
+1. **Download the latest skill zip** → [**`google-ads-audit-v0.1.0.zip`**](https://github.com/optmyzr-skills/google-ads-audit/releases/latest/download/google-ads-audit-v0.1.0.zip) *(~90 KB, single file)*
+
+2. **Open Claude** (Desktop or claude.ai web)
+
+3. Click your **profile icon → Settings → Capabilities → Skills**
+
+4. Click the **+** button → **"Upload a skill"**
+
+5. **Drag the zip in** (or click to browse and select it) → confirm
+
+6. **Start a new conversation** and say:
+   > *"Audit my Google Ads account"*
+
+That's it. Claude will run the 14-category audit. *(No `/audit` slash command needed in claude.ai — Claude auto-routes from natural-language requests.)*
+
+[![Download zip](https://img.shields.io/badge/⬇️_Download-google--ads--audit--v0.1.0.zip-blue?style=for-the-badge)](https://github.com/optmyzr-skills/google-ads-audit/releases/latest/download/google-ads-audit-v0.1.0.zip)
+
+---
+
+### 🔧 Option 2 — Claude Code CLI (developers)
+
+For users running [Claude Code](https://claude.com/product/claude-code) in a terminal or IDE.
 
 ```
 /plugin marketplace add optmyzr-skills/google-ads-audit
 /plugin install google-ads-audit
 ```
 
-Done. Start a new conversation and try:
+Then start a new conversation and type:
 
 ```
 /audit
 ```
 
-### Option B — Symlink the skill (for tinkerers)
+---
+
+### 🛟 Option 3 — Symlink fallback (any environment)
+
+If Option 2 doesn't work in your Claude Code version, use this in a terminal:
 
 ```bash
 git clone https://github.com/optmyzr-skills/google-ads-audit.git ~/google-ads-audit
