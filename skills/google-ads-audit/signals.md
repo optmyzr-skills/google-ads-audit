@@ -122,6 +122,15 @@ Total: ~42 curated signals. The full Optmyzr audit covers ~93. The remaining ~50
 - **Data:** Ask user; cross-check Search Terms paste for negative-list strength.
 - **Fix:** Don't enable AI Max until conversion tracking + negatives are strong; if running DSAs, plan migration in 2026 (Google has signaled DSA consolidation into AI Max).
 
+### 4.4 Display campaign placement exclusion lists *(added v0.1.2)*
+- **Checks:** Display campaigns *without* placement exclusion lists serve ads to low-quality apps (mobileapps.google.com), parked domains, and adult content categories — wasting budget and distorting Display performance data. This signal applies to any campaign whose `Type` is `Display`, `Demand Gen`, or `Performance Max` (PMax serves Display/Demand Gen inventory).
+- **Pass:** All Display / Demand Gen / PMax campaigns have account-level OR campaign-level placement exclusion lists applied; common categories excluded (mobile apps, gambling-if-not-relevant, sensitive content).
+- **Warning:** Some Display campaigns have exclusions, others don't; or coverage is partial (e.g., mobile apps excluded but no content category exclusions).
+- **Fail:** Active Display campaigns with **no** placement exclusion lists configured.
+- **Data:** Cannot be directly fetched via the current MCP. Inference path: if account has Display/PMax campaigns AND `get_competitor_insights` shows mobileapps.google.com in shared placements, exclusions are likely missing. Otherwise: ask user OR include as a paste-fill prompt.
+- **MCP-mode fallback:** Cannot directly verify. Default to WARNING when Display campaigns are present and the user hasn't confirmed exclusions. Recommend the fix proactively.
+- **Fix:** Create a shared placement exclusion list. Standard exclusions: `mobileapps.google.com` categories, parked domains, "Below the fold" placements (Display only), and any vertical-specific irrelevant categories. Apply to all Display, Demand Gen, and PMax campaigns.
+
 ---
 
 ## Category 5 — Budgets & Spend
@@ -190,13 +199,15 @@ Total: ~42 curated signals. The full Optmyzr audit covers ~93. The remaining ~50
 - **Data:** Not in Campaigns paste — ask user OR check the geographic locations report (advanced). With MCP: check via account settings if exposed.
 - **Fix:** For each campaign, edit Locations → Location options → choose "Presence" only. Re-evaluate after 14 days.
 
-### 7.2 Ad scheduling reflects business hours where it matters
-- **Checks:** For lead-gen accounts where calls/forms are answered only in business hours, after-hours spend with no follow-up is waste.
-- **Pass:** Schedule reflects business hours OR is intentionally 24/7
-- **Warning:** No schedule but business is local/lead-gen
-- **Fail:** Account is lead-gen with off-hours form abandonment, schedule is 24/7
-- **Data:** Ask user (interview Q1 + clarification). Cross-check Search Terms by hour if available.
-- **Fix:** Add ad schedule with bid adjustments (or simple on/off) for after-hours; for e-commerce, generally leave 24/7.
+### 7.2 Ad scheduling reflects business hours where it matters *(sharpened v0.1.2)*
+- **Checks:** For lead-gen accounts where calls/forms are answered only in business hours, after-hours spend with no follow-up is waste. For local service accounts, off-hours dayparts often have very different intent and conversion rates than business hours. The default of "always on, no adjustments" is rarely optimal.
+- **Pass:** Schedule reflects business hours OR is intentionally 24/7 with documented reason; bid adjustments for off-hours are calibrated (typically -30% to -100% for low-conversion hours).
+- **Warning:** Schedule exists but is the same on every campaign (no segmentation between e-com and lead-gen sub-campaigns) OR no bid adjustments applied to a meaningful schedule.
+- **Fail (lead-gen):** **No ad schedule configured on any campaign in a lead-gen account.** Off-hours leads that go to voicemail or unwatched forms have a fraction of the conversion rate of business-hours leads — running 24/7 wastes budget on the worst-converting times.
+- **Fail (general):** Schedule is 24/7 with no bid adjustments, AND change history shows no recent dayparting work.
+- **Data:** Not in CampaignPerformance MCP response — ask user OR check ChangeHistory for schedule-related changes (`Change Type=AdSchedule` or similar). For paste mode: typically requires user input.
+- **MCP-mode fallback:** If `ChangeHistory` shows zero ad-schedule changes ever AND account is lead-gen, treat as FAIL with the explicit recommendation to add at minimum a -50% bid adjustment for 12am–5am as a starting point.
+- **Fix:** Add ad schedule with bid adjustments for after-hours. For lead-gen with phone-answered conversions: -100% (off) for non-business hours. For lead-gen with web forms: -50% for low-intent hours, retest after 30 days. For e-commerce: typically leave 24/7 unless conversion rate clearly drops at specific hours.
 
 ### 7.3 Device bid adjustments aren't masking systemic issues
 - **Checks:** Aggressive device adjustments (e.g., -100% mobile, +50% desktop) often mask landing page or conversion-tracking issues rather than real performance differences.
@@ -351,13 +362,32 @@ Total: ~42 curated signals. The full Optmyzr audit covers ~93. The remaining ~50
 - **Data:** Ads paste (4a) — group by Ad group, count active ads.
 - **Fix:** For ad groups with 1-2 ads, add an additional RSA variant (test different value props, CTAs, structure).
 
-### 12.3 RSA asset count and pinning sanity
-- **Checks:** Per RSA, count distinct headlines and descriptions. Excessive pinning (every position pinned) defeats the RSA's purpose.
-- **Pass:** Each active RSA has ≥8 headlines, ≥3 descriptions, pinning only on legally-required or critical brand positions
-- **Warning:** 5-7 headlines, 2 descriptions, some pinning
-- **Fail:** <5 headlines, 1 description, or every position pinned
-- **Data:** Ads paste (4a) — Headlines and Descriptions are typically pipe- or semi-colon-separated; pinning may be denoted in column or absent (ask if needed).
-- **Fix:** Add headlines/descriptions to underspec'd RSAs. Unpin all but absolutely-essential pins.
+### 12.3 RSA asset count and pinning sanity *(sharpened v0.1.2)*
+- **Checks:** Per RSA, count distinct headlines and descriptions; check pinning patterns. The threshold isn't just "any one ad is good" — it's the **median** RSA in the account. If most RSAs are under-spec'd, Google's testing engine has nothing to optimize against.
+- **Pass:** Median active RSA has ≥10 headlines and ≥3 descriptions; pinning only on legally-required positions or critical brand mentions; <20% of RSAs in the account have <8 headlines.
+- **Warning:** Median active RSA has 7–9 headlines and ≥3 descriptions; some over-pinning; 20–50% of RSAs have <8 headlines.
+- **Fail:** Median active RSA has <7 headlines OR <3 descriptions; **OR ≥50% of active RSAs have <8 headlines** (Google's recommended floor); OR every position pinned in any active RSA.
+- **Data:** AdPerformance — count Headlines / Descriptions per RSA (typically pipe- or semicolon-separated). Compute median across active RSAs. Pinning may require paste-fill.
+- **MCP-mode fallback:** Same calculation; the median check works directly on AdPerformance data without needing QS columns.
+- **Fix:** Identify all RSAs below 8 headlines / 3 descriptions. Add variations targeting different value props, CTAs, and search-intent angles. Refresh assets quarterly. Unpin everything except brand and legal positions.
+
+### 12.4 Duplicate ad copy across ad groups *(added v0.1.2)*
+- **Checks:** When the same headline string or description string appears in many ad groups, Google's Ad Relevance and Quality Score signals suffer — and Performance Max / RSA testing degenerates because the system has nothing to test. This is one of the highest-leverage hidden findings: it's invisible to scorecard-style audits but obvious from spend-weighted ad copy data.
+- **Pass:** No single headline string or description string appears in more than 15% of active ads in the account.
+- **Warning:** A single headline or description string appears in 15–40% of active ads (e.g. a generic brand tagline used in too many ad groups).
+- **Fail:** **A single headline or description string appears in ≥40% of active ads.** Verified failure pattern: a directory-style account where "Comprehensive Local Directory" was the H1 in 82% of active ads, dragging Ad Relevance below average across the entire account.
+- **Data:** AdPerformance — paginate to cover top-spend ads (50+ recommended). For each ad: split Headlines and Descriptions on their delimiter into individual strings. Aggregate counts of `(string → set of ad groups)`. Flag any string appearing in 15%+ of active ad groups.
+- **MCP-mode fallback:** Direct calculation from AdPerformance. No paste-fill needed.
+- **Fix:** Identify the top-3 most-repeated headlines and descriptions. Rewrite each ad group's primary RSA H1 to reflect that ad group's specific theme/keyword (e.g., "Whakatane Sports Clubs" not "Comprehensive Local Directory"). Use the ad group name or its top keyword as the basis for the H1. Refresh in batches of 10–20 ad groups to avoid disrupting the entire account at once.
+
+### 12.5 Legacy ad types still serving *(added v0.1.2)*
+- **Checks:** Expanded Text Ads (sunset 30 June 2022) and the older standard Text Ads (sunset 2018) continue to serve in some accounts long after their format is deprecated. They get fewer impressions, no Smart Bidding optimization, and are eventually retired entirely. Any active ETA or TextAd in 2026 is dead weight.
+- **Pass:** Zero active ETAs and zero active TextAds in the account.
+- **Warning:** 1–5 active ETAs across the account; no TextAds.
+- **Fail:** ≥6 active ETAs OR any active TextAd; OR an entire ad group running ETA-only with no RSA fallback.
+- **Data:** AdPerformance — `Ad Type` column. Count rows where `Ad Type` is `ExpandedTextAd` or `TextAd` and `Ad Status = Enabled`.
+- **MCP-mode fallback:** Direct calculation from AdPerformance. No paste-fill needed.
+- **Fix:** Pause all ETAs and TextAds in Google Ads Editor (filter by Ad Type, bulk-pause). Before pausing, verify each affected ad group has at least one active RSA — if not, create one first. ETAs that have been serving for years often have keyword-rich copy worth porting into the new RSA's headlines.
 
 ---
 

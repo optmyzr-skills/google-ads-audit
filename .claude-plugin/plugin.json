@@ -1,6 +1,6 @@
 {
   "name": "google-ads-audit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Comprehensive Google Ads audit across 14 categories — Quality Score, Performance Max, conversion tracking, audiences, landing pages, wasted spend, and more. Powered by Optmyzr's audit methodology.",
   "author": {
     "name": "Optmyzr Inc.",

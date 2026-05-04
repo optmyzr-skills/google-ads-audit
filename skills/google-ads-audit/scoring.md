@@ -29,7 +29,15 @@ For each category:
 CategoryScore (%) = SUM(applicable signal points) / SUM(applicable signal max points) × 100
 ```
 
-Each category has 3 signals, so max possible per category = 30 points (when all 3 are applicable).
+Most categories have **3 signals** (max 30 points per category). A few categories have more because the underlying area is high-leverage:
+
+| Category | Signal count | Max points |
+|---|---|---|
+| Cat 4 — Performance Max & Alt Channels | 4 *(added 4.4 Display exclusions in v0.1.2)* | 40 |
+| Cat 12 — Ads / RSAs | 5 *(added 12.4 duplicate copy + 12.5 legacy ad types in v0.1.2)* | 50 |
+| All other categories | 3 | 30 |
+
+The percentage formula is the same regardless of signal count, since it's `applicable_points / applicable_max × 100`. Category weights (next section) compensate for the extra signal coverage in Cat 4 and Cat 12 — the per-category percentage is what feeds into the weighted overall, not raw point counts.
 
 ### Category color badge
 
